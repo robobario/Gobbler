@@ -45,10 +45,10 @@ class GobblerSketch extends PApplet {
   override def draw() {
     background(255)
     val result = Await.result(grid ? GetGrid, 1 second).asInstanceOf[Array[Array[Boolean]]]
-    wikiTexts = wikiTexts ::: Await.result(wikiTextFactory ? GetTexts, 1 second).asInstanceOf[List[WikiText]]
     wikiTexts = wikiTexts.filter {t => !t.complete()}
+    wikiTexts = (wikiTexts ::: Await.result(wikiTextFactory ? GetTexts, 1 second).asInstanceOf[List[WikiText]]).take(25)
+    range.foreach{row => range.foreach{col => if(result(row)(col)){stroke(255 * row/1000, 255 * col/1000, 0 , 180);point(row,col)}} }
     fill(0)
-    range.foreach{row => range.foreach{col => if(result(row)(col)){point(row,col)}} }
     wikiTexts.foreach {t => t.display(this)}
     wikiTexts = wikiTexts.map {t => t.next()}
     (1 to logMessages.length).foreach{i => text(logMessages(i-1), 10 , i*10)}
