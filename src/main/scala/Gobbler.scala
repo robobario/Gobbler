@@ -69,20 +69,36 @@ case object Start extends Message
 case object GetGrid extends Message
 case object GetTexts extends Message
 case object Move extends Message
+case class Occupied(x:Int, y:Int) extends Message
 
 class Grid extends Actor{
   val data = Array.ofDim[Boolean](1000,1000)
+  var occupied : Set[Occupied] = Set() 
+  val rnd = new Random()
 
   protected def receive = {
     case up:Update ⇒
       data(up.x)(up.y) = up.occupied
+      if(up.occupied){occupied = occupied + new Occupied(up.x,up.y)}
     case Deleted(x,y) ⇒
       data(x)(y) = false
+      val occ = new Occupied(x,y)
+      occupied = occupied.filter {x => x != occ}
     case Moved(fromx,fromy,tox,toy) ⇒
       data(fromx)(fromy) = false
+      val occ = new Occupied(fromx,fromy)
+      occupied = occupied.filter {x => x != occ}
       data(tox)(toy) = true
+      occupied = occupied + new Occupied(tox,toy) 
     case GetGrid ⇒
       sender ! data
+    case GetRand ⇒
+      val list = occupied.toList
+      if(list.length > 0){
+      	sender ! list(rnd.nextInt(list.length))
+      }else{
+        sender ! new Occupied(1,1)
+      }
   }
 }
 
@@ -113,7 +129,7 @@ class ActionLog extends Actor{
 }
 
 class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
-   val tint = 255 - ((255/100) * frame)
+   val tint = 255 - ((255/20) * frame)
 
    def display(context:PApplet) {
      context.fill(0,0,0,tint)
@@ -122,7 +138,7 @@ class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
    }
 
    def complete() = {
-      frame == 100
+      frame == 20
    }
 
    def next() = {
@@ -158,14 +174,16 @@ class FileFiddler(dir:File, grid:ActorRef, actionLog: ActorRef) extends Actor{
   val rnd = new Random()
   val range = 0 to 999
   val temp = dir
-
+  implicit val timeout:Timeout = Timeout(5 seconds)
+  
   def receive = {
     case Move ⇒
-      val fromx = range(rnd.nextInt(range length))
-      val fromy = range(rnd.nextInt(range length))
+      val result = Await.result(grid ? GetRand, 1 second).asInstanceOf[Occupied]
+      val fromx = result.x 
+      val fromy = result.y 
       val from = new File(dir,fromx.toString+fromy.toString)
       if(from.exists()){
-        if (rnd.nextBoolean()){
+        if (rnd.nextInt(10) > 2){
           val tox = range(rnd.nextInt(range length))
           val toy = range(rnd.nextInt(range length))
           val to = new File(dir,tox.toString+toy.toString)
