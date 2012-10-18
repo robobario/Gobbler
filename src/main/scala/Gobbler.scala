@@ -129,7 +129,7 @@ class ActionLog extends Actor{
 }
 
 class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
-   val tint = 255 - ((255/20) * frame)
+   val tint = 255 - ((255/60) * frame)
 
    def display(context:PApplet) {
      context.fill(0,0,0,tint)
@@ -138,7 +138,7 @@ class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
    }
 
    def complete() = {
-      frame == 20
+      frame == 60
    }
 
    def next() = {
