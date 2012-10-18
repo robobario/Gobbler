@@ -23,12 +23,12 @@ class GobblerSketch extends PApplet {
 
   val sys: ActorSystem = ActorSystem.create("gobbler")
   val grid: ActorRef = sys.actorOf(Props[Grid], name = "grid")
-  val data = Array.ofDim[Boolean](1000,1000)
+  val data = Array.ofDim[Boolean](500,500)
   val wikiTextFactory: ActorRef = sys.actorOf(Props[WikiTextFactory], name = "wiki")
   val actionLog:ActorRef = sys.actorOf(Props[ActionLog],name = "actionLog")
   implicit val timeout:Timeout = Timeout(5 seconds)
   val rnd = new Random()
-  val range = 0 to 999
+  val range = 0 to 499
   var wikiTexts:List[WikiText] = Nil
   var logMessages:List[String] = Nil
 
@@ -44,16 +44,47 @@ class GobblerSketch extends PApplet {
 
   override def draw() {
     background(255)
-    val result = Await.result(grid ? GetGrid, 1 second).asInstanceOf[Array[Array[Boolean]]]
-    wikiTexts = wikiTexts.filter {t => !t.complete()}
-    wikiTexts = (wikiTexts ::: Await.result(wikiTextFactory ? GetTexts, 1 second).asInstanceOf[List[WikiText]]).take(25)
-    range.foreach{row => range.foreach{col => if(result(row)(col)){stroke(255 * row/1000, 255 * col/1000, 0 , 180);point(row,col)}} }
-    fill(0)
-    wikiTexts.foreach {t => t.display(this)}
-    wikiTexts = wikiTexts.map {t => t.next()}
-    (1 to logMessages.length).foreach{i => text(logMessages(i-1), 10 , i*10)}
+    drawGrid()
+    drawWikiQuotes()
+    drawLogMessages()
+  }
+
+
+  def drawLogMessages() {
+    (1 to logMessages.length).foreach {
+      i => text(logMessages(i - 1), 10, i * 10)
+    }
     val logs = Await.result(actionLog ? GetTexts, 1 second).asInstanceOf[List[String]]
     logMessages = (logs ::: logMessages).take(100)
+  }
+
+  def drawWikiQuotes() {
+    wikiTexts = wikiTexts.filter {
+      t => !t.complete()
+    }
+    wikiTexts = (wikiTexts ::: Await.result(wikiTextFactory ? GetTexts, 1 second).asInstanceOf[List[WikiText]]).take(8)
+    wikiTexts.foreach {
+      t => t.display(this)
+    }
+    wikiTexts = wikiTexts.map {
+      t => t.next()
+    }
+  }
+
+  def drawGrid (){
+    val result = Await.result(grid ? GetGrid, 1 second).asInstanceOf[Array[Array[Boolean]]]
+    range.foreach {
+      row =>
+        range.foreach {
+          col =>
+            if (result(row)(col)) {
+              stroke(255 * row / 500, 255 * col / 500, 0, 75)
+              fill(255 * row / 500, 255 * col / 500, 0, 75)
+              rect((row * 2) - 1, (col * 2) - 1, 2, 2)
+            }
+        }
+    }
+    fill(0)
   }
 }
 
@@ -72,7 +103,7 @@ case object Move extends Message
 case class Occupied(x:Int, y:Int) extends Message
 
 class Grid extends Actor{
-  val data = Array.ofDim[Boolean](1000,1000)
+  val data = Array.ofDim[Boolean](500,500)
   var occupied : Set[Occupied] = Set() 
   val rnd = new Random()
 
@@ -105,14 +136,14 @@ class Grid extends Actor{
 class WikiTextFactory extends Actor{
   var texts : List[String] = Nil
   val rnd = new Random()
-  val xrange = 0 to 400
-  val yrange = 0 to 999
+  val xrange = 0 to 200
+  val yrange = 0 to 499
 
   def receive = {
     case NewFile(text) ⇒
-      texts = (text :: texts).take(10)
+      texts = (text :: texts).take(3)
     case GetTexts ⇒
-      sender ! texts.map {t => new WikiText(xrange(rnd.nextInt(xrange length)),yrange(rnd.nextInt(yrange length)),t,1) }
+      sender ! texts.map {t => new WikiText(xrange(rnd.nextInt(xrange length)) * 2,yrange(rnd.nextInt(yrange length)) * 2,t,1) }
       texts = Nil
   }
 }
@@ -129,7 +160,7 @@ class ActionLog extends Actor{
 }
 
 class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
-   val tint = 255 - ((255/60) * frame)
+   val tint = 255 - ((255/150) * frame)
 
    def display(context:PApplet) {
      context.fill(0,0,0,tint)
@@ -138,7 +169,7 @@ class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
    }
 
    def complete() = {
-      frame == 60
+      frame == 150
    }
 
    def next() = {
@@ -148,7 +179,7 @@ class WikiText(val x:Int, val y:Long, val text:String, val frame:Int) {
 
 class FileSaver(dir:File, listener:ActorRef, grabber:ActorRef, wikiTextFactory:ActorRef, actionLog: ActorRef) extends Actor{
   val rnd = new Random()
-  val range = 0 to 999
+  val range = 0 to 499
   val temp = dir
 
   def receive = {
@@ -172,7 +203,7 @@ class FileSaver(dir:File, listener:ActorRef, grabber:ActorRef, wikiTextFactory:A
 
 class FileFiddler(dir:File, grid:ActorRef, actionLog: ActorRef) extends Actor{
   val rnd = new Random()
-  val range = 0 to 999
+  val range = 0 to 499
   val temp = dir
   implicit val timeout:Timeout = Timeout(5 seconds)
   
@@ -186,10 +217,12 @@ class FileFiddler(dir:File, grid:ActorRef, actionLog: ActorRef) extends Actor{
         if (rnd.nextInt(10) > 2){
           val tox = range(rnd.nextInt(range length))
           val toy = range(rnd.nextInt(range length))
-          val to = new File(dir,tox.toString+toy.toString)
-          Files.move(from,to)
-          grid ! Moved(fromx, fromy,tox,toy)
-          actionLog ! LogMessage("moved " + fromx + fromy + " to " + tox + toy)
+          if(tox != fromx && toy != fromy){
+            val to = new File(dir,tox.toString+toy.toString)
+            Files.move(from,to)
+            grid ! Moved(fromx, fromy,tox,toy)
+            actionLog ! LogMessage("moved " + fromx + fromy + " to " + tox + toy)
+          }
         }else{
           from.delete()
           grid ! Deleted(fromx, fromy)
